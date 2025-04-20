@@ -6,7 +6,7 @@ from langchain_community.tools.wikipedia.tool import WikipediaQueryRun
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_community.utilities.arxiv import ArxivAPIWrapper
 from langchain_community.utilities.wikipedia import WikipediaAPIWrapper
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 from langchain.tools.render import format_tool_to_openai_function
 from langgraph.graph import END, StateGraph
@@ -21,6 +21,22 @@ class ChatState(TypedDict):
     messages: List[Dict[str, str]]
     current_tool: Optional[str]
     tool_result: Optional[str]
+
+def convert_to_langchain_messages(messages: List[Dict[str, str]]) -> List[Union[HumanMessage, AIMessage, SystemMessage]]:
+    """Convert dict messages to LangChain message objects."""
+    message_map = {
+        "user": HumanMessage,
+        "assistant": AIMessage,
+        "system": SystemMessage
+    }
+    
+    langchain_messages = []
+    for msg in messages:
+        message_class = message_map.get(msg["role"])
+        if message_class:
+            langchain_messages.append(message_class(content=msg["content"]))
+    
+    return langchain_messages
 
 def create_agent():
     """Create and configure the agent with tools."""
@@ -46,7 +62,7 @@ def create_agent():
     # Define the tool calling node
     def should_use_tool(state: ChatState) -> bool:
         """Determine if a tool should be used based on the current state."""
-        messages = state["messages"]
+        messages = convert_to_langchain_messages(state["messages"])
         response = llm.predict_messages(
             messages,
             functions=functions
@@ -86,7 +102,8 @@ def create_agent():
             "content": f"Tool {tool_name} returned: {result}"
         })
         
-        response = llm.predict_messages(messages)
+        langchain_messages = convert_to_langchain_messages(messages)
+        response = llm.predict_messages(langchain_messages)
         messages.append({"role": "assistant", "content": response.content})
         
         state["tool_result"] = None
