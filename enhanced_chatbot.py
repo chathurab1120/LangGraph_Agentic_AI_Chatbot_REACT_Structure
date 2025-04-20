@@ -44,7 +44,7 @@ def create_agent():
     functions = [format_tool_to_openai_function(t) for t in tools]
     
     # Define the tool calling node
-    def should_use_tool(state: ChatState) -> Tuple[bool, Optional[str]]:
+    def should_use_tool(state: ChatState) -> bool:
         """Determine if a tool should be used based on the current state."""
         messages = state["messages"]
         response = llm.predict_messages(
@@ -54,21 +54,25 @@ def create_agent():
         
         if response.additional_kwargs.get("function_call"):
             function_call = response.additional_kwargs["function_call"]
-            return True, function_call["name"]
+            state["current_tool"] = function_call["name"]
+            return True
         
         state["messages"].append({"role": "assistant", "content": response.content})
-        return False, None
+        return False
 
-    def call_tool(state: ChatState, tool_name: str) -> ChatState:
+    def call_tool(state: ChatState) -> ChatState:
         """Execute the specified tool."""
         messages = state["messages"]
         last_message = messages[-1]["content"]
+        tool_name = state["current_tool"]
         
+        if tool_name is None:
+            raise ValueError("No tool specified")
+            
         tool = tool_map[tool_name]
         result = tool.invoke(last_message)
         
         state["tool_result"] = result
-        state["current_tool"] = tool_name
         return state
 
     def process_tool_result(state: ChatState) -> ChatState:
@@ -97,11 +101,16 @@ def create_agent():
     workflow.add_node("call_tool", call_tool)
     workflow.add_node("process_result", process_tool_result)
     
-    # Add edges
-    workflow.add_edge("tool_decision", "call_tool")
+    # Add conditional edges
+    workflow.add_conditional_edges(
+        "tool_decision",
+        lambda x: "call_tool" if x else END
+    )
     workflow.add_edge("call_tool", "process_result")
     workflow.add_edge("process_result", "tool_decision")
-    workflow.add_edge("tool_decision", END)
+    
+    # Set entry point
+    workflow.set_entry_point("tool_decision")
     
     # Compile the graph
     chain = workflow.compile()
