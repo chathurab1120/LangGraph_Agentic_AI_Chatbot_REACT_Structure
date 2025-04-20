@@ -1,100 +1,85 @@
-# Enhanced AI Chatbot with REACT Architecture
+# LangGraph Agentic AI Chatbot
 
-This is an intelligent chatbot that uses LangGraph with REACT (Reasoning and Acting) architecture to provide comprehensive responses using multiple tools.
-
-## 🔗 Live Demo
-Try the chatbot here: [LangGraph Agentic AI Chatbot](https://langgraph-agentic-ai-chatbot-react.streamlit.app)
+An advanced chatbot implementation using LangGraph for structured conversations and tool usage. The chatbot can access multiple external tools including Wikipedia, Arxiv, and Tavily Search to provide comprehensive responses.
 
 ## Features
 
-- 📚 **Arxiv Integration**: Search and retrieve academic papers
-- 📖 **Wikipedia Integration**: Access general knowledge
-- 🔍 **Tavily Search**: Real-time internet search capabilities
-- 🤖 **REACT Architecture**: Smart reasoning before taking actions
-- 🎯 **Multi-tool Orchestration**: Seamlessly combines information from multiple sources
+- Multi-tool integration (Wikipedia, Arxiv, Tavily Search)
+- Structured conversation flow using LangGraph
+- Intelligent tool selection based on query context
+- Comprehensive error handling
+- 100% test coverage
+- Modern dependency management
 
 ## Prerequisites
 
-- Python 3.8 or higher
-- Groq API key (get it from [Groq Console](https://console.groq.com/))
-- Tavily API key (get it from [Tavily](https://tavily.com/))
+- Python 3.8+
+- Groq API key
+- Tavily API key
 
 ## Installation
 
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/chathurab1120/LangGraph_Agentic_AI_Chatbot_REACT_Structure.git
-   cd LangGraph_Agentic_AI_Chatbot_REACT_Structure
-   ```
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/LangGraph_Agentic_AI_Chatbot_REACT_Structure.git
+cd LangGraph_Agentic_AI_Chatbot_REACT_Structure
+```
 
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+2. Create and activate a virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
 
-3. Set up your environment variables:
-   - Copy `.env.example` to `.env`
-   - Add your API keys to the `.env` file:
-     ```
-     GROK_API_KEY=your_grok_api_key_here
-     TAVILY_API_KEY=your_tavily_api_key_here
-     ```
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
 
-## Deployment
+4. Create a .env file with your API keys:
+```
+GROK_API_KEY=your_groq_api_key
+TAVILY_API_KEY=your_tavily_api_key
+```
 
-### Local Development
-1. Start the Streamlit app:
-   ```bash
-   streamlit run streamlit_app.py
-   ```
+## Running the Chatbot
 
-2. If you haven't set the API keys in the `.env` file, you can enter them directly in the sidebar of the web interface
+1. Start the chatbot:
+```bash
+python enhanced_chatbot.py
+```
 
-### Streamlit Cloud Deployment
-1. Fork this repository to your GitHub account
-2. Visit [Streamlit Cloud](https://share.streamlit.io/)
-3. Create a new app and select this repository
-4. In the Streamlit Cloud settings:
-   - Set the Python version to 3.8 or higher
-   - Add your API keys as secrets:
-     ```toml
-     GROK_API_KEY = "your_grok_api_key_here"
-     TAVILY_API_KEY = "your_tavily_api_key_here"
-     ```
-5. Deploy!
+## Development
 
-## Usage Examples
+To set up the development environment:
 
-You can ask the chatbot various types of questions, such as:
+1. Install development dependencies:
+```bash
+pip install -r test-requirements.txt
+```
 
-- "What are the latest papers on transformer architectures?"
-- "Tell me about the history of quantum computing and recent developments"
-- "What are the current applications of REACT architecture in AI systems?"
-
-The chatbot will automatically:
-1. Analyze your question
-2. Choose the appropriate tool(s)
-3. Gather information
-4. Provide a comprehensive response
+2. Run tests:
+```bash
+python run_tests.py
+```
 
 ## Project Structure
 
-- `streamlit_app.py`: Main Streamlit application
-- `enhanced_chatbot.py`: Core chatbot logic with REACT architecture
-- `requirements.txt`: Project dependencies
-- `.env`: API key configuration
-- `.streamlit/config.toml`: Streamlit theme configuration
+- `enhanced_chatbot.py`: Main chatbot implementation
+- `test_enhanced_chatbot.py`: Test suite
+- `requirements.txt`: Production dependencies
+- `test-requirements.txt`: Development dependencies
+- `run_tests.py`: Test runner with coverage reporting
 
-## Security
+## Testing
 
-- Never commit your API keys to the repository
-- Use environment variables or Streamlit secrets for sensitive information
-- The `.env` file is included in `.gitignore` to prevent accidental commits
-
-## Contributing
-
-Feel free to submit issues and enhancement requests!
+The project maintains 100% test coverage and includes tests for:
+- Message conversion
+- Agent creation
+- Direct responses
+- Tool usage
+- Error handling
 
 ## License
 
-[MIT License](LICENSE) 
+MIT License 

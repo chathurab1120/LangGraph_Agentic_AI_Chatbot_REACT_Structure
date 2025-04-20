@@ -26,10 +26,16 @@ wheels/
 *.egg
 
 # Virtual Environment
+test_env/
 venv/
 ENV/
 env/
 .env/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
 
 # IDE
 .idea/

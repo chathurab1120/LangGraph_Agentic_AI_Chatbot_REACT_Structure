@@ -8,9 +8,8 @@ from langchain_community.utilities.arxiv import ArxivAPIWrapper
 from langchain_community.utilities.wikipedia import WikipediaAPIWrapper
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
-from langchain.tools.render import format_tool_to_openai_function
-from langgraph.graph import END, StateGraph
 from langchain_core.utils.function_calling import convert_to_openai_function
+from langgraph.graph import END, StateGraph
 from langchain_groq import ChatGroq
 
 # Load environment variables
@@ -103,8 +102,8 @@ def create_agent():
     
     print("Tools initialized")
     
-    # Convert tools to OpenAI functions format
-    functions = [format_tool_to_openai_function(t) for t in tools]
+    # Convert tools to OpenAI functions format using the new method
+    functions = [convert_to_openai_function(t) for t in tools]
     
     # Define the tool calling node
     def should_use_tool(state: Dict) -> Dict:
@@ -142,7 +141,7 @@ def create_agent():
         except Exception as e:
             print(f"Error in should_use_tool: {str(e)}")
             return {
-                "messages": state["messages"] + [{"role": "assistant", "content": "I apologize, but I'm having trouble processing your request. Could you please rephrase your question?"}],
+                "messages": state["messages"] + [{"role": "assistant", "content": f"An error occurred while processing your request: {str(e)}. Please try again."}],
                 "current_tool": None,
                 "tool_result": None,
                 "__next_node__": END
@@ -166,51 +165,44 @@ def create_agent():
             result = tool.invoke(last_message)
             print(f"Tool result received: {result[:100]}...")  # Print first 100 chars
             
+            # Add a system message about tool usage
+            tool_message = {"role": "system", "content": f"Tool {tool_name} returned: {str(result)}"}
             return {
-                "messages": messages,
+                "messages": messages + [tool_message],
                 "current_tool": tool_name,
                 "tool_result": str(result),
                 "__next_node__": "process_result"
             }
         except Exception as e:
             print(f"Error in call_tool: {str(e)}")
+            error_msg = f"An error occurred while using the {state['current_tool']} tool: {str(e)}"
             return {
-                "messages": state["messages"] + [{"role": "system", "content": f"Error using tool: {str(e)}"}],
+                "messages": state["messages"] + [{"role": "assistant", "content": error_msg}],
                 "current_tool": None,
                 "tool_result": None,
-                "__next_node__": "tool_decision"
+                "__next_node__": END
             }
 
     def process_tool_result(state: Dict) -> Dict:
         """Process the result from the tool execution."""
         print("Entering process_tool_result")
         try:
-            result = state["tool_result"]
-            tool_name = state["current_tool"]
             messages = state["messages"]
-            
-            print(f"Processing result from {tool_name}")
-            
-            # Add tool result as system message
-            new_messages = messages + [{
-                "role": "system",
-                "content": f"Tool {tool_name} returned: {result}"
-            }]
             
             # Get AI response
             print("Getting AI response to tool result")
-            langchain_messages = convert_to_langchain_messages(new_messages)
+            langchain_messages = convert_to_langchain_messages(messages)
             response = llm.predict_messages(langchain_messages)
             print(f"AI response received: {response.content[:100]}...")  # Print first 100 chars
             
             # Add AI response to messages
-            final_messages = new_messages + [{"role": "assistant", "content": response.content}]
+            final_messages = messages + [{"role": "assistant", "content": response.content}]
             
             return {
                 "messages": final_messages,
                 "current_tool": None,
                 "tool_result": None,
-                "__next_node__": "tool_decision"
+                "__next_node__": END
             }
         except Exception as e:
             print(f"Error in process_tool_result: {str(e)}")
@@ -232,6 +224,11 @@ def create_agent():
     
     # Set entry point
     workflow.set_entry_point("tool_decision")
+    
+    # Add edges
+    workflow.add_edge("tool_decision", "call_tool")
+    workflow.add_edge("call_tool", "process_result")
+    workflow.add_edge("process_result", END)
     
     print("Compiling graph")
     # Compile the graph
