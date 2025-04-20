@@ -16,6 +16,10 @@ from langchain_groq import ChatGroq
 # Load environment variables
 load_dotenv()
 
+# Debug print for API keys
+print("GROK_API_KEY present:", bool(os.getenv("GROK_API_KEY")))
+print("TAVILY_API_KEY present:", bool(os.getenv("TAVILY_API_KEY")))
+
 SYSTEM_PROMPT = """You are a helpful AI assistant with access to multiple tools:
 1. Arxiv: For searching academic papers and research
 2. Wikipedia: For general knowledge and concepts
@@ -31,7 +35,9 @@ Remember to:
 - Use Arxiv for academic/research questions
 - Use Wikipedia for general knowledge and concepts
 - Use Tavily Search for current events and real-time information
-- Combine information from multiple tools when needed"""
+- Combine information from multiple tools when needed
+
+If you don't need to use any tools, just provide a direct response."""
 
 class ChatState(TypedDict):
     """Type definition for chat state."""
@@ -61,12 +67,17 @@ def convert_to_langchain_messages(messages: List[Dict[str, str]]) -> List[Union[
 def create_agent():
     """Create and configure the agent with tools."""
     
+    print("Initializing agent...")
+    
     # Initialize LLM
     llm = ChatGroq(
         api_key=os.getenv("GROK_API_KEY"),
-        model_name="llama3-8b-8192",
+        model_name="mixtral-8x7b-32768",  # Using Mixtral model instead
         temperature=0.7,
+        max_tokens=4096,
     )
+    
+    print("LLM initialized")
 
     # Initialize tools with better descriptions
     arxiv_tool = ArxivQueryRun(
@@ -90,22 +101,29 @@ def create_agent():
     tools = [arxiv_tool, wikipedia_tool, search_tool]
     tool_map = {tool.name: tool for tool in tools}
     
+    print("Tools initialized")
+    
     # Convert tools to OpenAI functions format
     functions = [format_tool_to_openai_function(t) for t in tools]
     
     # Define the tool calling node
     def should_use_tool(state: Dict) -> Dict:
         """Determine if a tool should be used based on the current state."""
+        print("Entering should_use_tool")
         messages = convert_to_langchain_messages(state["messages"])
+        print(f"Messages prepared: {len(messages)} messages")
         
         try:
+            print("Calling LLM for tool decision")
             response = llm.predict_messages(
                 messages,
                 functions=functions
             )
+            print(f"LLM response received: {response}")
             
             if response.additional_kwargs.get("function_call"):
                 function_call = response.additional_kwargs["function_call"]
+                print(f"Tool selected: {function_call['name']}")
                 return {
                     "messages": state["messages"],
                     "current_tool": function_call["name"],
@@ -113,6 +131,7 @@ def create_agent():
                     "__next_node__": "call_tool"
                 }
             
+            print("No tool needed, providing direct response")
             new_messages = state["messages"] + [{"role": "assistant", "content": response.content}]
             return {
                 "messages": new_messages,
@@ -122,7 +141,6 @@ def create_agent():
             }
         except Exception as e:
             print(f"Error in should_use_tool: {str(e)}")
-            # Fallback to direct response
             return {
                 "messages": state["messages"] + [{"role": "assistant", "content": "I apologize, but I'm having trouble processing your request. Could you please rephrase your question?"}],
                 "current_tool": None,
@@ -132,21 +150,26 @@ def create_agent():
 
     def call_tool(state: Dict) -> Dict:
         """Execute the specified tool."""
+        print("Entering call_tool")
         try:
             messages = state["messages"]
             last_message = messages[-1]["content"]
             tool_name = state["current_tool"]
+            
+            print(f"Calling tool: {tool_name}")
+            print(f"With input: {last_message}")
             
             if tool_name is None:
                 raise ValueError("No tool specified")
                 
             tool = tool_map[tool_name]
             result = tool.invoke(last_message)
+            print(f"Tool result received: {result[:100]}...")  # Print first 100 chars
             
             return {
                 "messages": messages,
                 "current_tool": tool_name,
-                "tool_result": str(result),  # Ensure result is string
+                "tool_result": str(result),
                 "__next_node__": "process_result"
             }
         except Exception as e:
@@ -160,10 +183,13 @@ def create_agent():
 
     def process_tool_result(state: Dict) -> Dict:
         """Process the result from the tool execution."""
+        print("Entering process_tool_result")
         try:
             result = state["tool_result"]
             tool_name = state["current_tool"]
             messages = state["messages"]
+            
+            print(f"Processing result from {tool_name}")
             
             # Add tool result as system message
             new_messages = messages + [{
@@ -172,8 +198,10 @@ def create_agent():
             }]
             
             # Get AI response
+            print("Getting AI response to tool result")
             langchain_messages = convert_to_langchain_messages(new_messages)
             response = llm.predict_messages(langchain_messages)
+            print(f"AI response received: {response.content[:100]}...")  # Print first 100 chars
             
             # Add AI response to messages
             final_messages = new_messages + [{"role": "assistant", "content": response.content}]
@@ -193,6 +221,7 @@ def create_agent():
                 "__next_node__": END
             }
 
+    print("Creating graph")
     # Create the graph
     workflow = StateGraph(ChatState)
     
@@ -204,13 +233,16 @@ def create_agent():
     # Set entry point
     workflow.set_entry_point("tool_decision")
     
+    print("Compiling graph")
     # Compile the graph
     chain = workflow.compile()
     
+    print("Agent creation complete")
     return chain
 
 def process_message(chain, message: str, history: List[Dict[str, str]]) -> List[Dict[str, str]]:
     """Process a message through the agent chain."""
+    print(f"\nProcessing new message: {message}")
     try:
         state = {
             "messages": history + [{"role": "user", "content": message}],
@@ -218,7 +250,9 @@ def process_message(chain, message: str, history: List[Dict[str, str]]) -> List[
             "tool_result": None
         }
         
+        print("Invoking chain")
         result = chain.invoke(state)
+        print("Chain execution complete")
         return result["messages"]
     except Exception as e:
         print(f"Error in process_message: {str(e)}")
