@@ -60,7 +60,7 @@ def create_agent():
     functions = [format_tool_to_openai_function(t) for t in tools]
     
     # Define the tool calling node
-    def should_use_tool(state: ChatState) -> bool:
+    def should_use_tool(state: Dict) -> Dict:
         """Determine if a tool should be used based on the current state."""
         messages = convert_to_langchain_messages(state["messages"])
         response = llm.predict_messages(
@@ -70,13 +70,22 @@ def create_agent():
         
         if response.additional_kwargs.get("function_call"):
             function_call = response.additional_kwargs["function_call"]
-            state["current_tool"] = function_call["name"]
-            return True
+            return {
+                "messages": state["messages"],
+                "current_tool": function_call["name"],
+                "tool_result": None,
+                "__next_node__": "call_tool"
+            }
         
-        state["messages"].append({"role": "assistant", "content": response.content})
-        return False
+        new_messages = state["messages"] + [{"role": "assistant", "content": response.content}]
+        return {
+            "messages": new_messages,
+            "current_tool": None,
+            "tool_result": None,
+            "__next_node__": END
+        }
 
-    def call_tool(state: ChatState) -> ChatState:
+    def call_tool(state: Dict) -> Dict:
         """Execute the specified tool."""
         messages = state["messages"]
         last_message = messages[-1]["content"]
@@ -88,27 +97,38 @@ def create_agent():
         tool = tool_map[tool_name]
         result = tool.invoke(last_message)
         
-        state["tool_result"] = result
-        return state
+        return {
+            "messages": messages,
+            "current_tool": tool_name,
+            "tool_result": result,
+            "__next_node__": "process_result"
+        }
 
-    def process_tool_result(state: ChatState) -> ChatState:
+    def process_tool_result(state: Dict) -> Dict:
         """Process the result from the tool execution."""
         result = state["tool_result"]
         tool_name = state["current_tool"]
-        
         messages = state["messages"]
-        messages.append({
+        
+        # Add tool result as system message
+        new_messages = messages + [{
             "role": "system",
             "content": f"Tool {tool_name} returned: {result}"
-        })
+        }]
         
-        langchain_messages = convert_to_langchain_messages(messages)
+        # Get AI response
+        langchain_messages = convert_to_langchain_messages(new_messages)
         response = llm.predict_messages(langchain_messages)
-        messages.append({"role": "assistant", "content": response.content})
         
-        state["tool_result"] = None
-        state["current_tool"] = None
-        return state
+        # Add AI response to messages
+        final_messages = new_messages + [{"role": "assistant", "content": response.content}]
+        
+        return {
+            "messages": final_messages,
+            "current_tool": None,
+            "tool_result": None,
+            "__next_node__": "tool_decision"
+        }
 
     # Create the graph
     workflow = StateGraph(ChatState)
@@ -117,14 +137,6 @@ def create_agent():
     workflow.add_node("tool_decision", should_use_tool)
     workflow.add_node("call_tool", call_tool)
     workflow.add_node("process_result", process_tool_result)
-    
-    # Add conditional edges
-    workflow.add_conditional_edges(
-        "tool_decision",
-        lambda x: "call_tool" if x else END
-    )
-    workflow.add_edge("call_tool", "process_result")
-    workflow.add_edge("process_result", "tool_decision")
     
     # Set entry point
     workflow.set_entry_point("tool_decision")
