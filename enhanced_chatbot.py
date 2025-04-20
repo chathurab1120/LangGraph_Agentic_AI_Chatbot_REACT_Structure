@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Tuple, Any, TypedDict, Annotated
+from typing import Dict, List, Tuple, Any, TypedDict, Annotated, Union, Optional
 from dotenv import load_dotenv
 from langchain_community.tools.arxiv.tool import ArxivQueryRun
 from langchain_community.tools.wikipedia.tool import WikipediaQueryRun
@@ -19,8 +19,8 @@ load_dotenv()
 class ChatState(TypedDict):
     """Type definition for chat state."""
     messages: List[Dict[str, str]]
-    current_tool: str | None
-    tool_result: str | None
+    current_tool: Optional[str]
+    tool_result: Optional[str]
 
 def create_agent():
     """Create and configure the agent with tools."""
@@ -44,7 +44,7 @@ def create_agent():
     functions = [format_tool_to_openai_function(t) for t in tools]
     
     # Define the tool calling node
-    def should_use_tool(state: ChatState) -> Tuple[bool, str | None]:
+    def should_use_tool(state: ChatState) -> Tuple[bool, Optional[str]]:
         """Determine if a tool should be used based on the current state."""
         messages = state["messages"]
         response = llm.predict_messages(
